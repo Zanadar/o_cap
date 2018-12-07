@@ -27,8 +27,11 @@ type caps struct {
 	data user_cap_data
 }
 
+//go:generate stringer -type=CAP
+type CAP uint
+
 const (
-	CAP_CHOWN = iota
+	CAP_CHOWN CAP = iota
 	CAP_DAC_OVERRIDE
 	CAP_DAC_READ_SEARCH
 	CAP_FOWNER
@@ -66,6 +69,7 @@ const (
 	CAP_WAKE_ALARM
 	CAP_BLOCK_SUSPEND
 	CAP_AUDIT_READ
+	CAP_LAST_CAP = CAP_AUDIT_READ
 )
 
 // 1 << 5 == bits in __u32
@@ -110,4 +114,10 @@ func realMain() (int, error) {
 	fmt.Println("cap", c)
 
 	return 0, nil
+}
+
+func checkCap(capSet uint32, cap CAP) (capName string, active bool) {
+	active = (capSet & 1 << uint(CAP_SYS_TIME)) != 0
+
+	return CAP.String(), active
 }

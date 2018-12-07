@@ -1,5 +1,16 @@
 package main
 
+import (
+	"fmt"
+	"os"
+	"strconv"
+	"syscall"
+	"unsafe"
+
+	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
+)
+
 type user_cap_header struct {
 	version uint32
 	pid     int
@@ -9,6 +20,11 @@ type user_cap_data struct {
 	effective   uint32
 	permitted   uint32
 	inheritable uint32
+}
+
+type caps struct {
+	hdr  user_cap_header
+	data user_cap_data
 }
 
 const (
@@ -58,5 +74,40 @@ func capToIndex(cap uint32) uint32 { return (cap) >> 5 }
 // mask for indexed __u32
 func capToMask(cap uint32) uint32 { return (1 << ((cap) & 31)) }
 func main() {
+	code, err := realMain()
+	if err != nil {
+		fmt.Fprint(os.Stderr, errors.Wrap(err, "problem fetching CAPs\n"))
+	}
+	os.Exit(code)
+}
 
+func realMain() (int, error) {
+	if len(os.Args) < 2 {
+		return 1, errors.New("please specify a pid to check")
+	}
+
+	pid, err := strconv.Atoi(os.Args[1])
+	if err != nil {
+		return 1, err
+	}
+
+	c := caps{
+		hdr: user_cap_header{
+			pid: pid,
+		},
+	}
+
+	if _, _, errno := syscall.Syscall(syscall.SYS_CAPGET, uintptr(unsafe.Pointer(&c.hdr)), uintptr(unsafe.Pointer(nil)), 0); errno != 0 {
+		return int(errno), os.NewSyscallError("capget", errors.New(unix.ErrnoName(errno)))
+	}
+
+	if _, _, errno := syscall.Syscall(unix.SYS_CAPGET, uintptr(unsafe.Pointer(&c.hdr)), uintptr(unsafe.Pointer(&c.data)), 0); errno != 0 {
+		fmt.Println("cap : %#v", c)
+
+		return int(errno), os.NewSyscallError("capget", errors.New(unix.ErrnoName(errno)))
+	}
+
+	fmt.Println("cap", c)
+
+	return 0, nil
 }
